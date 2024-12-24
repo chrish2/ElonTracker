@@ -5,28 +5,8 @@ A real-time web application that tracks and visualizes the location data of Elon
 ![Screenshot](pics/screenshot.png)
 
 ## Features
-
 - 🛩️ Real-time tracking of jet location
-- 🗺️ Interactive map visualization
-- 📊 Flight history and statistics
-- 📱 Responsive design for mobile and desktop
-- 🔔 Optional notifications for takeoff and landing
 
-## Tech Stack
-
-- Frontend: React.js with TypeScript
-- Styling: Tailwind CSS
-- Mapping: Mapbox GL JS
-- Backend: Node.js/Express
-- Database: MongoDB
-- Deployment: Docker & AWS
-
-## Prerequisites
-
-- Node.js (v18 or higher)
-- Yarn package manager
-- MongoDB
-- Mapbox API key
 
 ## Installation & Setup
 
