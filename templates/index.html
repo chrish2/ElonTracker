@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elon's Flight Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --spacex-dark: #000000;
+            --spacex-light: #ffffff;
+            --spacex-accent: #005288;
+            --spacex-red: #cc0000;
+        }
+
+        body {
+            background-color: var(--spacex-dark);
+            color: var(--spacex-light);
+            font-family: 'Roboto', sans-serif;
+            min-height: 100vh;
+        }
+
+        .card {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            color: var(--spacex-light);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+
+        .recent-flights {
+            max-height: 300px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--spacex-accent) var(--spacex-dark);
+        }
+
+        .recent-flights::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .recent-flights::-webkit-scrollbar-track {
+            background: var(--spacex-dark);
+        }
+
+        .recent-flights::-webkit-scrollbar-thumb {
+            background-color: var(--spacex-accent);
+            border-radius: 3px;
+        }
+
+        .map-container {
+            position: relative;
+            height: 500px;
+            margin: 20px 0;
+            background-color: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+
+        .location-dot {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 4px rgba(0, 82, 136, 0.5));
+        }
+
+        .location-dot:hover {
+            filter: drop-shadow(0 0 8px rgba(204, 0, 0, 0.8));
+        }
+
+        .location-label {
+            font-size: 12px;
+            fill: var(--spacex-light);
+            font-weight: 300;
+            pointer-events: none;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--spacex-accent);
+            color: var(--spacex-light);
+            padding: 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 2rem;
+            background: linear-gradient(45deg, var(--spacex-light), var(--spacex-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .flight-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 0.75rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .flight-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .flight-time {
+            color: var(--spacex-accent);
+            font-size: 0.8rem;
+            font-weight: 300;
+        }
+
+        .flight-text {
+            color: var(--spacex-light);
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        #map path {
+            transition: all 0.3s ease;
+        }
+
+        #map .nation {
+            fill: #1a1a1a;
+            stroke: var(--spacex-accent);
+            stroke-width: 0.5;
+        }
+
+        #map .states {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 0.5;
+        }
+
+        .stats-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--spacex-accent);
+        }
+
+        .stats-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="page-title">Elon Musk Flight Tracker</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Live Flight Map</h5>
+                        <div class="map-container" id="map"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Flight Activity Analysis</h5>
+                        <div class="chart-container">
+                            <canvas id="flightChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Recent Flight Log</h5>
+                        <div class="recent-flights" id="recentFlights"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let projection; // Make projection globally available
+        let mapSvg;
+
+        async function initMap() {
+            // Load US map data
+            const us = await d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+            
+            const width = document.getElementById('map').offsetWidth;
+            const height = 500;
+            
+            // Initialize projection globally
+            projection = d3.geoAlbersUsa()
+                .fitSize([width, height], topojson.feature(us, us.objects.nation));
+            
+            const path = d3.geoPath().projection(projection);
+            
+            // Clear any existing SVG
+            d3.select("#map svg").remove();
+            
+            const svg = d3.select("#map")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+            
+            // Draw base map
+            svg.append("path")
+                .datum(topojson.feature(us, us.objects.nation))
+                .attr("class", "nation")
+                .attr("d", path);
+            
+            svg.append("path")
+                .datum(topojson.mesh(us, us.objects.states))
+                .attr("class", "states")
+                .attr("d", path);
+                
+            return svg;
+        }
+        
+        async function updateMap(locations) {
+            if (!mapSvg) {
+                mapSvg = await initMap();
+            }
+            
+            // Clear existing dots and labels
+            mapSvg.selectAll(".location-dot").remove();
+            mapSvg.selectAll(".location-label").remove();
+            
+            // Add dots for each location
+            Object.entries(locations).forEach(([location, data]) => {
+                const coords = data.coordinates;
+                if (coords) {
+                    const [longitude, latitude] = coords;
+                    const projectedCoords = projection([longitude, latitude]);
+                    
+                    if (projectedCoords) {  // Check if coordinates are within USA bounds
+                        const total = data.takeoffs + data.landings;
+                        const radius = Math.sqrt(total) * 5 + 5;
+                        
+                        // Add dot
+                        mapSvg.append("circle")
+                            .attr("class", "location-dot")
+                            .attr("cx", projectedCoords[0])
+                            .attr("cy", projectedCoords[1])
+                            .attr("r", radius)
+                            .attr("fill", "rgba(0, 82, 136, 0.7)")
+                            .attr("stroke", "rgba(0, 82, 136, 1)")
+                            .on("mouseover", function(event) {
+                                d3.select(this)
+                                    .attr("fill", "rgba(204, 0, 0, 0.7)")
+                                    .attr("stroke", "rgba(204, 0, 0, 1)");
+                                showTooltip(event, location, data);
+                            })
+                            .on("mouseout", function() {
+                                d3.select(this)
+                                    .attr("fill", "rgba(0, 82, 136, 0.7)")
+                                    .attr("stroke", "rgba(0, 82, 136, 1)");
+                                hideTooltip();
+                            });
+                        
+                        // Add label
+                        mapSvg.append("text")
+                            .attr("class", "location-label")
+                            .attr("x", projectedCoords[0])
+                            .attr("y", projectedCoords[1] - radius - 5)
+                            .attr("text-anchor", "middle")
+                            .text(location.split(",")[0]);
+                    }
+                }
+            });
+        }
+        
+        function showTooltip(event, location, data) {
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .style("display", "block");
+                
+            tooltip.html(`
+                <strong>${location}</strong><br>
+                Takeoffs: ${data.takeoffs}<br>
+                Landings: ${data.landings}<br>
+                Total: ${data.takeoffs + data.landings}
+            `);
+        }
+        
+        function hideTooltip() {
+            d3.select(".tooltip").remove();
+        }
+
+        // Add window resize handler
+        window.addEventListener('resize', async () => {
+            if (mapSvg) {
+                mapSvg = await initMap();
+                const response = await fetch('/api/flight-stats');
+                const data = await response.json();
+                updateMap(data.locations);
+            }
+        });
+
+        async function fetchFlightStats() {
+            try {
+                const response = await fetch('/api/flight-stats');
+                const data = await response.json();
+                updateChart(data.locations);
+                updateMap(data.locations);
+                updateRecentFlights(data.recent_flights);
+            } catch (error) {
+                console.error('Error fetching flight stats:', error);
+            }
+        }
+
+        function updateChart(locations) {
+            const ctx = document.getElementById('flightChart').getContext('2d');
+            
+            const locationNames = Object.keys(locations);
+            const takeoffs = locationNames.map(loc => locations[loc].takeoffs);
+            const landings = locationNames.map(loc => locations[loc].landings);
+
+            Chart.defaults.color = "#ffffff";
+            Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: locationNames,
+                    datasets: [
+                        {
+                            label: 'Takeoffs',
+                            data: takeoffs,
+                            backgroundColor: 'rgba(0, 82, 136, 0.7)',
+                            borderColor: 'rgba(0, 82, 136, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Landings',
+                            data: landings,
+                            backgroundColor: 'rgba(204, 0, 0, 0.7)',
+                            borderColor: 'rgba(204, 0, 0, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateRecentFlights(flights) {
+            const container = document.getElementById('recentFlights');
+            container.innerHTML = flights.map(flight => `
+                <div class="flight-card p-3">
+                    <div class="flight-time">${new Date(flight.timestamp).toLocaleString()}</div>
+                    <p class="flight-text">${flight.text}</p>
+                </div>
+            `).join('');
+        }
+
+        // Initial load
+        fetchFlightStats();
+
+        // Refresh every 5 minutes
+        setInterval(fetchFlightStats, 5 * 60 * 1000);
+    </script>
+</body>
+</html> 
