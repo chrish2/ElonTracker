@@ -7,6 +7,9 @@ import config
 from urllib.parse import urlencode
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
+from cache_service import cache
+from datetime import timedelta
+import json
 
 class APIClient:
     def __init__(self, actor: str, limit: int = 100):
@@ -43,7 +46,8 @@ class FlightService:
         self.landings = defaultdict(int)
         self.geolocator = Nominatim(user_agent="elon_tracker")
         self.location_cache = {}
-        self.all_flights = []  # Store all flights with their coordinates
+        self.all_flights = []
+        self.CACHE_KEY = "flight_stats"
     
     def parse_location(self, text: str) -> tuple:
         """Extract location and type from flight text"""
@@ -126,17 +130,22 @@ class FlightService:
         return flight_paths
 
     async def get_flight_stats(self) -> Dict:
-        # Reset counters and flights
-        self.takeoffs.clear()
-        self.landings.clear()
-        self.all_flights = []
+        # Try to get from cache first
+        cached_data = cache.get(self.CACHE_KEY)
+        if cached_data:
+            return cached_data
         
+        # If not in cache, fetch new data
         try:
+            # Reset counters and flights
+            self.takeoffs.clear()
+            self.landings.clear()
+            self.all_flights = []
+            
             response_data = await self.api_client.get_request(endpoint="/")
             
             flights = []
             if 'feed' in response_data:
-                # Process posts in chronological order
                 posts = sorted(
                     response_data['feed'],
                     key=lambda x: x['post']['record']['createdAt']
@@ -169,13 +178,20 @@ class FlightService:
             
             # Get paired flights
             flight_paths = self.pair_flights()
-
-            return {
+            
+            # Prepare response data
+            response = {
                 'locations': locations_with_coords,
                 'recent_flights': flights,
                 'flight_paths': flight_paths,
-                'all_flights': self.all_flights  # Include all individual flights
+                'all_flights': self.all_flights,
+                'cached_at': datetime.now().isoformat()
             }
+            
+            # Store in cache for 3 hours
+            cache.set(self.CACHE_KEY, response)
+            
+            return response
             
         except Exception as e:
             print(f"Error fetching flight stats: {e}")
